@@ -1,0 +1,26 @@
+Step-1: Download the Apache kafka : https://kafka.apache.org/downloads
+
+Step-2: Unzip the kafka Archive
+
+Step-3: Copy and paste unzipped file to the safe Local Disk of your computer (e.g; C or D)
+
+Step-4 : Setting up Environmental Variable
+
+Step-5: Edit the Configure files:
+  i)  zookeeper.peroperties = C:\kafka\tmp\zookeeper
+  ii) server.properties  = C:\kafka\tmp\kfka-log
+
+Step-6: Start the zookeeper by typing follwing commands at Commandline
+ .\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties
+
+Step-7: Start a kafka Broker by typing follwing commands at Commandline
+ .\bin\windows\kafka-server-start.bat .\config\server.properties
+
+Step-8: Check the Kafka Services by typing follwing commands at Commandline
+  jps
+
+Step-9: Stop the zookeeper by typing follwing commands at Commandline
+.\bin\windows\zookeeper-server-stop.bat
+
+Step-10: Stop the Kafka Service typing follwing commands at Commandline
+.\bin\windows\kafka-server-stop.bat
