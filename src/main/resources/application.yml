@@ -16,7 +16,7 @@ app:
   dlq-topic: app-topic.DLT
   third-party:
     base-url: https://httpbin.org
-    endpoint: /post
+    endpoint: /status/500
 retry:
   max-attempts: 3
   backoff-ms: 2000

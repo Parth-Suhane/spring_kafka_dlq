@@ -1,6 +1,7 @@
 package com.example.kafkadlq.service;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -26,11 +27,12 @@ public class ThirdPartyService {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body)
                 .retrieve()
-                .onStatus(s -> !s.is2xxSuccessful(),
-                        r -> r.bodyToMono(String.class)
-                                .flatMap(b -> Mono.error(new RuntimeException("Third party error: " + b))))
+                .onStatus(HttpStatusCode::isError, resp ->
+                        Mono.error(new RuntimeException("Third-party error: " + resp.statusCode()))
+                )
                 .bodyToMono(String.class)
                 .timeout(Duration.ofSeconds(10))
+                .doOnError(ex -> { throw new RuntimeException(ex); })
                 .block();
     }
 }
