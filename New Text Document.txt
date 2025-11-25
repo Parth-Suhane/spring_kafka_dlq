@@ -1,0 +1,26 @@
+ // Add a RetryListener to log each retry attempt (attempt number starts at 1 for the first retry)
+        RetryListener retryLogger = (record, ex, deliveryAttempt) -> {
+            try {
+                String key = (record != null && record.key() != null) ? record.key().toString() : "null-key";
+                String topic = (record != null && record.topic() != null) ? record.topic() : "unknown-topic";
+                int partition = record != null ? record.partition() : -1;
+                logger.warn("Retry attempt {} for record key='{}' topic='{}' partition={} - exception: {}",
+                        deliveryAttempt, key, topic, partition, ex.toString());
+            } catch (Exception logEx) {
+                logger.warn("Failed to log retry attempt: {}", logEx.toString());
+            }
+        };
+        // Attach the retry listener
+        errorHandler.setRetryListeners(retryLogger);
+
+        // Optionally skip retry for specific exceptions (uncomment and adjust if needed)
+        // errorHandler.addNotRetryableExceptions(IllegalArgumentException.class);
+
+        // Enable deliveryAttempt header so listeners/other components can see retry count in message headers
+        factory.getContainerProperties().setDeliveryAttemptHeader(true);
+
+        // Attach the configured error handler to the listener container factory
+        factory.setCommonErrorHandler(errorHandler);
+
+        logger.info("Configured kafkaListenerContainerFactory with bootstrapServers={}, maxAttempts={}, backoffMs={}",
+                bootstrapServers, maxAttempts, backoffMs);
