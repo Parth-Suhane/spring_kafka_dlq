@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
-import org.springframework.util.concurrent.ListenableFutureCallback;
 
 @Service
 public class ProducerService {
@@ -29,35 +28,20 @@ public class ProducerService {
             throw new IllegalArgumentException("Message or message.id must not be null");
         }
 
-        try {
-            kafkaTemplate.send(topic, msg.getId(), msg).addCallback(
-                    new ListenableFutureCallback<SendResult<String, MessageDto>>() {
+        kafkaTemplate.send(topic, msg.getId(), msg)
+                .whenComplete((SendResult<String, MessageDto> result, Throwable ex) -> {
+                    if (ex == null) {
+                        log.info("Message sent successfully: key={} topic={} partition={} offset={}",
+                                msg.getId(),
+                                result.getRecordMetadata().topic(),
+                                result.getRecordMetadata().partition(),
+                                result.getRecordMetadata().offset());
+                    } else {
+                        log.error("Failed to send message: key={} error={}", msg.getId(), ex.getMessage(), ex);
 
-                        @Override
-                        public void onSuccess(SendResult<String, MessageDto> result) {
-                            log.info("Message sent successfully: key={} topic={} partition={} offset={}",
-                                    msg.getId(),
-                                    result.getRecordMetadata().topic(),
-                                    result.getRecordMetadata().partition(),
-                                    result.getRecordMetadata().offset());
-                        }
-
-                        @Override
-                        public void onFailure(Throwable ex) {
-                            log.error("Failed to send message: key={} error={}", msg.getId(), ex.getMessage(), ex);
-
-                            // Optional: persist failed message for later retry
-                            // saveFailedMessage(msg, ex);
-                        }
+                        // Optional: persist failed message for retry later
+                        // saveFailedMessage(msg, ex);
                     }
-            );
-        } catch (Exception ex) {
-            log.error("Unexpected error while sending Kafka message: {}", ex.getMessage(), ex);
-
-            // Optional: persist message for manual/automatic reprocessing
-            // saveFailedMessage(msg, ex);
-
-            throw ex; // Re-throw to allow API to propagate error to client
-        }
+                });
     }
 }
