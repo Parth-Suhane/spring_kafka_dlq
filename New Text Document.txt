@@ -1,26 +1,63 @@
- // Add a RetryListener to log each retry attempt (attempt number starts at 1 for the first retry)
-        RetryListener retryLogger = (record, ex, deliveryAttempt) -> {
-            try {
-                String key = (record != null && record.key() != null) ? record.key().toString() : "null-key";
-                String topic = (record != null && record.topic() != null) ? record.topic() : "unknown-topic";
-                int partition = record != null ? record.partition() : -1;
-                logger.warn("Retry attempt {} for record key='{}' topic='{}' partition={} - exception: {}",
-                        deliveryAttempt, key, topic, partition, ex.toString());
-            } catch (Exception logEx) {
-                logger.warn("Failed to log retry attempt: {}", logEx.toString());
-            }
-        };
-        // Attach the retry listener
-        errorHandler.setRetryListeners(retryLogger);
+package com.example.kafkadlq.service;
 
-        // Optionally skip retry for specific exceptions (uncomment and adjust if needed)
-        // errorHandler.addNotRetryableExceptions(IllegalArgumentException.class);
+import com.example.kafkadlq.dto.MessageDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+import org.springframework.stereotype.Service;
+import org.springframework.util.concurrent.ListenableFutureCallback;
 
-        // Enable deliveryAttempt header so listeners/other components can see retry count in message headers
-        factory.getContainerProperties().setDeliveryAttemptHeader(true);
+@Service
+public class ProducerService {
 
-        // Attach the configured error handler to the listener container factory
-        factory.setCommonErrorHandler(errorHandler);
+    private static final Logger log = LoggerFactory.getLogger(ProducerService.class);
 
-        logger.info("Configured kafkaListenerContainerFactory with bootstrapServers={}, maxAttempts={}, backoffMs={}",
-                bootstrapServers, maxAttempts, backoffMs);
+    private final KafkaTemplate<String, MessageDto> kafkaTemplate;
+    private final String topic;
+
+    public ProducerService(KafkaTemplate<String, MessageDto> kafkaTemplate,
+                           @Value("${app.topic}") String topic) {
+        this.kafkaTemplate = kafkaTemplate;
+        this.topic = topic;
+    }
+
+    public void sendMessage(MessageDto msg) {
+
+        if (msg == null || msg.getId() == null) {
+            throw new IllegalArgumentException("Message or message.id must not be null");
+        }
+
+        try {
+            kafkaTemplate.send(topic, msg.getId(), msg).addCallback(
+                    new ListenableFutureCallback<SendResult<String, MessageDto>>() {
+
+                        @Override
+                        public void onSuccess(SendResult<String, MessageDto> result) {
+                            log.info("Message sent successfully: key={} topic={} partition={} offset={}",
+                                    msg.getId(),
+                                    result.getRecordMetadata().topic(),
+                                    result.getRecordMetadata().partition(),
+                                    result.getRecordMetadata().offset());
+                        }
+
+                        @Override
+                        public void onFailure(Throwable ex) {
+                            log.error("Failed to send message: key={} error={}", msg.getId(), ex.getMessage(), ex);
+
+                            // Optional: persist failed message for later retry
+                            // saveFailedMessage(msg, ex);
+                        }
+                    }
+            );
+        } catch (Exception ex) {
+            log.error("Unexpected error while sending Kafka message: {}", ex.getMessage(), ex);
+
+            // Optional: persist message for manual/automatic reprocessing
+            // saveFailedMessage(msg, ex);
+
+            throw ex; // Re-throw to allow API to propagate error to client
+        }
+    }
+}
